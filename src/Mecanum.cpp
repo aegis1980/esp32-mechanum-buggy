@@ -2,10 +2,10 @@
 #include "Mecanum.h"
 
 #include <FastAccelStepper.h>
-
+const double PI2 = PI * 2;
 
     // Constructor: Initialize 4 stepper motors
-Mecanum::Mecanum(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t rearLeftPins[2], uint8_t rearRightPins[2]) : _wheelbase(0.2f), _trackWidth(0.2f), _wheelRadius(0.05f)
+Mecanum::Mecanum(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t rearLeftPins[2], uint8_t rearRightPins[2]) : _wheelbase(0.28f), _trackWidth(0.28f), _wheelRadius(0.04f)
 {
 
     _engine = FastAccelStepperEngine();
@@ -23,6 +23,7 @@ Mecanum::Mecanum(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t re
         _wheels[i].stepper->setAcceleration(ACCELERATION);
         _wheels[i].stepper->setEnablePin(26);
         _wheels[i].stepper->setAutoEnable(true);
+
       } else {
         Serial.printf("Failed to init stepper %s\n", _wheels[i].name);
       }
@@ -51,32 +52,42 @@ void Mecanum::_setWheelRPM(Wheel& wheel, float rpm) {
 }
 
 unsigned int Mecanum::move(float throttle, float strafe, float omega){
-  // Calculate wheel speeds in m/s
-  float v1 = (strafe - throttle - (_wheelbase + _trackWidth) * omega) / _wheelRadius;
-  float v2 = (strafe + throttle + (_wheelbase + _trackWidth) * omega) / _wheelRadius;
-  float v3 = (-strafe + throttle - (_wheelbase + _trackWidth) * omega) / _wheelRadius;
-  float v4 = (-strafe - throttle + (_wheelbase + _trackWidth) * omega) / _wheelRadius;
+
+
+  // Calculate wheel linear velocity at contact point
+  float v_fl = (strafe - throttle - (_wheelbase + _trackWidth) * omega) / 0.5f;
+  float v_fr = (strafe + throttle + (_wheelbase + _trackWidth) * omega) / 0.5f;
+  float v_rl = (-strafe + throttle - (_wheelbase + _trackWidth) * omega) / 0.5f;
+  float v_rr = (-strafe - throttle + (_wheelbase + _trackWidth) * omega) / 0.5f;
 
   // Convert wheel speeds (m/s) to RPM
-  float rpm1 = (v1 * 60) / (2 * PI * _wheelRadius);
-  float rpm2 = (v2 * 60) / (2 * PI * _wheelRadius);
-  float rpm3 = (v3 * 60) / (2 * PI * _wheelRadius);
-  float rpm4 = (v4 * 60) / (2 * PI * _wheelRadius);
+  float rpm_fl = (v_fl/ _wheelRadius) * ( 60 / PI2);
+  float rpm_fr = -(v_fr/ _wheelRadius) * ( 60 / PI2);// negative
+  float rpm_rl = (v_rl/ _wheelRadius) * ( 60 / PI2);
+  float rpm_rr = -(v_rr/ _wheelRadius) * ( 60 / PI2);//naegtive
  
 
 
-  _setWheelRPM(_wheels[0], rpm1);
-  _setWheelRPM(_wheels[1], rpm2);
-  _setWheelRPM(_wheels[2], rpm3);
-  _setWheelRPM(_wheels[3], rpm4);
+  _setWheelRPM(_wheels[0], rpm_fl);
+  _setWheelRPM(_wheels[1], rpm_fr); 
+  _setWheelRPM(_wheels[2], rpm_rl);
+  _setWheelRPM(_wheels[3], rpm_rr);
+
   
-   // Serial.printf(
-   //     "lf: %.3f, rf: %.3f lr: %.3f rr: %.3f\n",
-    //    rpm1,    
-     //   rpm2,    
-      //  rpm3,
-    //    rpm4     
-   // );
+  Serial.printf(
+    "throttle: %.3f, strafe: %.3f omega: %.3f  ----  ",
+    throttle,        
+    strafe,        
+    omega      
+  );
+  
+  Serial.printf(
+    "lf: %.3f, rf: %.3f lr: %.3f rr: %.3f\n",
+      rpm_fl,    
+      rpm_fr,    
+      rpm_rl,
+      rpm_rr     
+   );
 
    return 1;
 }

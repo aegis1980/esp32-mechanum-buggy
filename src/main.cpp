@@ -1,9 +1,15 @@
 #include <stdint.h>
 
+
+
 #include <Bluepad32.h>
 #include "Mecanum.h"
 #include "firmware.h"
 //include "BatteryMonitor.h"
+extern "C" {
+    #include "esp_bt.h"
+}
+
 
 // Onboard LED pin (for ESP32-DevKit V1 WROOM)
 const int LED_PIN = 2;
@@ -19,10 +25,10 @@ const float MAX_THROTTLE = 0.1f; //m/s
 const float MAX_OMEGA = 0.5f; //rad/sec
 
 // direction , step
-uint8_t frontLeftPins[] = {32,13};
-uint8_t frontRightPins[]= {33,16};
-uint8_t rearLeftPins[]= {25,17};
-uint8_t rearRightPins[] = {14,27};
+uint8_t frontLeftPins[] = {32,13}; //x on cnc board
+uint8_t frontRightPins[]= {33,16}; //y on cnc board
+uint8_t rearLeftPins[]= {25,17}; // z on cnc board
+uint8_t rearRightPins[] = {14,27}; // a oncnc board
 
 Mecanum buggy(frontLeftPins,frontRightPins,rearLeftPins,rearRightPins);
 
@@ -136,10 +142,17 @@ void processGamepad(ControllerPtr ctl) {
                 
                 ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,
                   0x40 /* strongMagnitude */);
-                delay(250);
+                delay(350);
                 ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,
                   0x40 /* strongMagnitude */);
 
+                ctl->disconnect();
+                delay(100);
+
+                btStop(); // Stop Bluetooth controller
+                esp_bt_controller_disable(); // Disable controller
+                delay(100);
+                
                 firmwareUpdate = true;
                 enterFirmwareFlashMode();
                 // So we don't trigger repeatedly
@@ -154,24 +167,7 @@ void processGamepad(ControllerPtr ctl) {
 
 
     if (ctl->a()) {
-        static int colorIdx = 0;
-        // Some gamepads like DS4 and DualSense support changing the color LED.
-        // It is possible to change it by calling:
-        switch (colorIdx % 3) {
-            case 0:
-                // Red
-                ctl->setColorLED(255, 0, 0);
-                break;
-            case 1:
-                // Green
-                ctl->setColorLED(0, 255, 0);
-                break;
-            case 2:
-                // Blue
-                ctl->setColorLED(0, 0, 255);
-                break;
-        }
-        colorIdx++;
+
     }
 
 
@@ -196,7 +192,7 @@ void processGamepad(ControllerPtr ctl) {
 
     // spin with right joy
     float omega = mapFloat(
-      static_cast<float>(ctl->axisRX()), //left joy value
+      static_cast<float>(ctl->axisRX()), //right joy value
       RIGHT_JOY[0],
       RIGHT_JOY[2],
       -MAX_OMEGA,
@@ -224,12 +220,7 @@ void processGamepad(ControllerPtr ctl) {
       );
     }
 
-    // Serial.printf(
-    //     "throttle: %.3f, strafe: %.3f omega: %.3f\n",
-    //     throttle,        // Controller Index
-    //     strafe,         // D-pad
-    //     omega      // bitmask of pressed buttons
-    // );
+
     
   buggy.move(throttle,strafe,omega);
     // Another way to query controller data is by getting the buttons() function.
