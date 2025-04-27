@@ -149,6 +149,7 @@ void processGamepad(ControllerPtr ctl) {
                 ctl->disconnect();
                 delay(100);
 
+                //disable bt on esp32 so does not screw up wifi comms
                 btStop(); // Stop Bluetooth controller
                 esp_bt_controller_disable(); // Disable controller
                 delay(100);
