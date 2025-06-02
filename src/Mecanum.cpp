@@ -74,7 +74,7 @@ unsigned int Mecanum::move(float throttle, float strafe, float omega){
   _setWheelRPM(_wheels[3], rpm_rr);
 
   
-  Serial.printf(
+  /* Serial.printf(
     "throttle: %.3f, strafe: %.3f omega: %.3f  ----  ",
     throttle,        
     strafe,        
@@ -87,7 +87,7 @@ unsigned int Mecanum::move(float throttle, float strafe, float omega){
       rpm_fr,    
       rpm_rl,
       rpm_rr     
-   );
+   ); */
 
    return 1;
 }

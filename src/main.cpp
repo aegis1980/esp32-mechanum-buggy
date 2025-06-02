@@ -1,11 +1,11 @@
 #include <stdint.h>
 
-
-
 #include <Bluepad32.h>
+
 #include "Mecanum.h"
 #include "firmware.h"
-//include "BatteryMonitor.h"
+#include "BatteryManager.cpp"
+
 extern "C" {
     #include "esp_bt.h"
 }
@@ -32,8 +32,7 @@ uint8_t rearRightPins[] = {14,27}; // a oncnc board
 
 Mecanum buggy(frontLeftPins,frontRightPins,rearLeftPins,rearRightPins);
 
-//BatteryMonitor battery(34, 30000.0, 10000.0);  // ADC pin, R1, R2
-
+BatteryManager bms; 
 
 ControllerPtr myControllers[BP32_MAX_GAMEPADS];
 
@@ -224,8 +223,7 @@ void processGamepad(ControllerPtr ctl) {
 
     
   buggy.move(throttle,strafe,omega);
-    // Another way to query controller data is by getting the buttons() function.
-    // See how the different "dump*" functions dump the Controller info.
+
     //dumpGamepad(ctl);
 }
 
@@ -240,6 +238,15 @@ void processControllers() {
             }
         }
     }
+}
+
+void handleBmsStatus(const BmsStatus& status){
+    // Serial.print("Voltage: ");
+    // Serial.print(status.voltage);
+    // Serial.print(" V, On Time: ");
+    // Serial.print(status.onTime);
+    // Serial.print(", Relay is ");
+    // Serial.println(status.relayOn ? "ON" : "OFF");
 }
 
 
@@ -267,8 +274,9 @@ void setup() {
     // By default, it is disabled.
     BP32.enableVirtualDevice(false);
 
-    //battery.begin();
-    //battery.onLowBattery(handleLowBattery);
+    bms.begin(9600);
+    bms.setStatusCallback(&handleBmsStatus);
+    bms.startDataUpload(); 
 }
 
 // Arduino loop function. Runs in CPU 1.
@@ -277,8 +285,10 @@ void loop() {
     // Call this function in your main loop.
     if (!firmwareUpdate){
         bool dataUpdated = BP32.update();
-        if (dataUpdated)
+        if (dataUpdated){
             processControllers();
+        };
+        bms.poll();
 
         // The main loop must have some kind of "yield to lower priority task" event.
         // Otherwise, the watchdog will get triggered.
