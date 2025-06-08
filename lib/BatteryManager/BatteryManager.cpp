@@ -14,6 +14,8 @@ struct BmsStatus {
     }
 };
 
+
+
 struct Battery {
     float upperVoltage;
     float lowerVoltage;

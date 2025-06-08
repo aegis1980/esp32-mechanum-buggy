@@ -1,11 +1,16 @@
 
-#include "Mecanum.h"
+#include "MecanumBuggy.h"
 
 #include <FastAccelStepper.h>
 const double PI2 = PI * 2;
 
+
+int sign(float x) {
+    return (x > 0) - (x < 0);
+}
+
     // Constructor: Initialize 4 stepper motors
-Mecanum::Mecanum(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t rearLeftPins[2], uint8_t rearRightPins[2]) : _wheelbase(0.28f), _trackWidth(0.28f), _wheelRadius(0.04f)
+MecanumBuggy::MecanumBuggy(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t rearLeftPins[2], uint8_t rearRightPins[2]) : _wheelbase(0.38f), _trackWidth(0.38f), _wheelRadius(0.04f)
 {
 
     _engine = FastAccelStepperEngine();
@@ -31,27 +36,48 @@ Mecanum::Mecanum(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t re
 
 }
 
-void Mecanum::_setWheelRPM(Wheel& wheel, float rpm) {
+void MecanumBuggy::_calcSmallRpmChange(){
+  // max linear wheel speed
+  float v = (maxStrafe + maxThrottle + (_wheelbase + _trackWidth) * maxOmega) / 0.5f;
+  // max rpm 
+  float r = (v/ _wheelRadius) * ( 60 / PI2);
+
+  _smallRpmChange = r/150;
+}
+
+void MecanumBuggy::_setWheelTargetRPM(Wheel& wheel, float targetRpm) {
   if (!wheel.stepper) return;
 
-  if (rpm == 0.0f) {
-    wheel.stepper->forceStop();
+  if (targetRpm == 0.0f) {
+    wheel.currentRpm = 0.0f;
+    wheel.stepper->stopMove();
     return;
   }
 
-  // Convert RPM → steps/sec
-  float steps_per_sec = (abs(rpm) * EFFECTIVE_STEPS_PER_REV) / 60.0f;
 
-  wheel.stepper->setSpeedInHz((uint32_t)steps_per_sec);
+  float delta = targetRpm - wheel.currentRpm;
+  float rpm = targetRpm;
 
-  if (rpm > 0){
-    wheel.stepper->runForward();
-  }else{
-    wheel.stepper->runBackward();
+  if (abs(delta) > _smallRpmChange) {  // ignore small changes
+      rpm += (delta > 0) ? _smallRpmChange : -_smallRpmChange;  // ramp step
+      // Convert RPM → steps/sec
+      float steps_per_sec = (abs(rpm) * EFFECTIVE_STEPS_PER_REV) / 60.0f;
+
+      wheel.stepper->setSpeedInHz((uint32_t)steps_per_sec);
+
+      if (sign(rpm)!=sign(wheel.currentRpm)){
+        if (rpm > 0){
+          wheel.stepper->runForward();
+        }else{
+          wheel.stepper->runBackward();
+        }
+      } 
+      wheel.currentRpm = rpm;
   }
+
 }
 
-unsigned int Mecanum::move(float throttle, float strafe, float omega){
+unsigned int MecanumBuggy::move(float throttle, float strafe, float omega){
 
 
   // Calculate wheel linear velocity at contact point
@@ -65,13 +91,13 @@ unsigned int Mecanum::move(float throttle, float strafe, float omega){
   float rpm_fr = -(v_fr/ _wheelRadius) * ( 60 / PI2);// negative
   float rpm_rl = (v_rl/ _wheelRadius) * ( 60 / PI2);
   float rpm_rr = -(v_rr/ _wheelRadius) * ( 60 / PI2);//naegtive
- 
 
 
-  _setWheelRPM(_wheels[0], rpm_fl);
-  _setWheelRPM(_wheels[1], rpm_fr); 
-  _setWheelRPM(_wheels[2], rpm_rl);
-  _setWheelRPM(_wheels[3], rpm_rr);
+
+  _setWheelTargetRPM(_wheels[0], rpm_fl);
+  _setWheelTargetRPM(_wheels[1], -rpm_fr); 
+  _setWheelTargetRPM(_wheels[2], rpm_rl);
+  _setWheelTargetRPM(_wheels[3], -rpm_rr);
 
   
   /* Serial.printf(
@@ -91,4 +117,21 @@ unsigned int Mecanum::move(float throttle, float strafe, float omega){
 
    return 1;
 }
+
+void MecanumBuggy::setMaxStrafe(float s){
+  // m/sec
+  maxStrafe = s;
+  _calcSmallRpmChange();
+}
+
+void MecanumBuggy::setMaxThrottle(float t){
+  //m/sec
+  maxThrottle = t;
+  _calcSmallRpmChange();
+} 
+void MecanumBuggy::setMaxOmega(float a){
+  //rad per sec
+  maxOmega = a;
+  _calcSmallRpmChange();
+} 
 

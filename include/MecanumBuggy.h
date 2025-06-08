@@ -9,10 +9,11 @@ struct Wheel {
   uint8_t stepPin;
   uint8_t dirPin;
   FastAccelStepper* stepper;
+  float currentRpm;
 };
 
 
-class Mecanum {
+class MecanumBuggy {
 
 private:
   static constexpr uint8_t NUM_WHEELS = 4;
@@ -22,7 +23,8 @@ private:
   static constexpr uint32_t ACCELERATION = 300;  // Steps/sec^2
 
 
-  void _setWheelRPM(Wheel& wheel, float rpm);
+  void _setWheelTargetRPM(Wheel& wheel, float rpm);
+  void _calcSmallRpmChange();
 
   FastAccelStepperEngine _engine;
 
@@ -31,15 +33,25 @@ private:
   float _wheelbase;
   float _trackWidth;
   float _wheelRadius;
+  float _smallRpmChange;
 
 public:
     // Constructor: Initialize 4 stepper motors
-    Mecanum(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t rearLeftPins[2], uint8_t rearRightPins[2]);
+    MecanumBuggy(uint8_t frontLeftPins[2], uint8_t frontRightPins[2], uint8_t rearLeftPins[2], uint8_t rearRightPins[2]);
+
+
+    float maxStrafe=0;
+    float maxThrottle=0;
+    float maxOmega=0;
 
     // Movement functions
 
     unsigned int move(float throttle, float strafe, float omega);
-    unsigned int  stop();
+    unsigned int stop(bool sudden);
+
+    void setMaxStrafe(float s);// m/sec
+    void setMaxThrottle(float t); //m/sec
+    void setMaxOmega(float a); //degrees per sec
 
 
 

@@ -2,7 +2,7 @@
 
 #include <Bluepad32.h>
 
-#include "Mecanum.h"
+#include "MecanumBuggy.h"
 #include "firmware.h"
 #include "BatteryManager.cpp"
 
@@ -17,12 +17,11 @@ const int LED_PIN = 2;
 // from running dumpGmaepad()
 const float LEFT_JOY[] = {-508.0f,4.0f,512.0f};
 const float RIGHT_JOY[] = {-508.0f,4.0f,512.0f};
+const float DEADZONE_JOY = 5.0f;
 const float LEFT_TRIGGER = 1020.0f;
 const float RIGHT_TRIGGER = 1020.0f;
 
-const float MAX_STRAFE = 0.1f; //m/s
-const float MAX_THROTTLE = 0.1f; //m/s
-const float MAX_OMEGA = 0.5f; //rad/sec
+
 
 // direction , step
 uint8_t frontLeftPins[] = {32,13}; //x on cnc board
@@ -30,7 +29,7 @@ uint8_t frontRightPins[]= {33,16}; //y on cnc board
 uint8_t rearLeftPins[]= {25,17}; // z on cnc board
 uint8_t rearRightPins[] = {14,27}; // a oncnc board
 
-Mecanum buggy(frontLeftPins,frontRightPins,rearLeftPins,rearRightPins);
+MecanumBuggy buggy(frontLeftPins,frontRightPins,rearLeftPins,rearRightPins);
 
 BatteryManager bms; 
 
@@ -40,22 +39,39 @@ unsigned long buttonsHeldStartTime = 0;
 bool buttonsWereHeld = false;
 
 bool firmwareUpdate = false;
+bool serialBmsMode = false;
 
 
 
-float mapFloat(float x, float in_min, float in_max, float out_min, float out_max, float in_centre = 0.0f) {
+float mapFloat(float x, float in_min, float in_max, float out_min, float out_max, float in_centre = 0.0f, float deadzone_joy = DEADZONE_JOY) {
   if (in_min == in_max) {
     // Handle the case where the input range is zero to avoid division by zero.
     return (out_min + out_max) / 2.0f; // Return the midpoint of the output range.
   }
 
+
+  if (abs(x-in_centre)< deadzone_joy){
+    x = in_centre;
+  }
+
+
   if (x == in_centre) {
     return (out_min + out_max) / 2.0f; // Return the midpoint of the output range.
   }
 
+
   float result = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 
   return result;
+}
+
+void enterSerialMode() {
+    if (!serialBmsMode){
+        Serial.println("Serial mode : ON");
+        Serial.println("Type 'exit' to exit!");
+        bms.stopDataUpload(); 
+        serialBmsMode = true;
+    }
 }
 
 // This callback gets called any time a new gamepad is connected.
@@ -167,7 +183,7 @@ void processGamepad(ControllerPtr ctl) {
 
 
     if (ctl->a()) {
-
+        enterSerialMode();
     }
 
 
@@ -185,8 +201,8 @@ void processGamepad(ControllerPtr ctl) {
       static_cast<float>(ctl->axisX()), //left joy value
       LEFT_JOY[0],
       LEFT_JOY[2],
-      -MAX_STRAFE,
-      MAX_STRAFE,
+      -buggy.maxStrafe,
+      buggy.maxStrafe,
       LEFT_JOY[1]
     );
 
@@ -195,8 +211,8 @@ void processGamepad(ControllerPtr ctl) {
       static_cast<float>(ctl->axisRX()), //right joy value
       RIGHT_JOY[0],
       RIGHT_JOY[2],
-      -MAX_OMEGA,
-      MAX_OMEGA,
+      -buggy.maxOmega,
+      buggy.maxOmega,
       RIGHT_JOY[1]
     );
 
@@ -215,8 +231,8 @@ void processGamepad(ControllerPtr ctl) {
         t, //left joy value
         -LEFT_TRIGGER,
         RIGHT_TRIGGER,
-        -MAX_THROTTLE,
-        MAX_THROTTLE
+        -buggy.maxThrottle,
+        buggy.maxThrottle
       );
     }
 
@@ -241,12 +257,12 @@ void processControllers() {
 }
 
 void handleBmsStatus(const BmsStatus& status){
-    // Serial.print("Voltage: ");
-    // Serial.print(status.voltage);
-    // Serial.print(" V, On Time: ");
-    // Serial.print(status.onTime);
-    // Serial.print(", Relay is ");
-    // Serial.println(status.relayOn ? "ON" : "OFF");
+    Serial.print("Voltage: ");
+    Serial.print(status.voltage);
+    Serial.print(" V, On Time: ");
+    Serial.print(status.onTime);
+    Serial.print(", Relay is ");
+    Serial.println(status.relayOn ? "ON" : "OFF");
 }
 
 
@@ -259,6 +275,10 @@ void setup() {
 
     // Setup the Bluepad32 callbacks
     BP32.setup(&onConnectedController, &onDisconnectedController);
+
+    buggy.setMaxThrottle(0.2f); // m/s
+    buggy.setMaxStrafe(0.2f);//m/s
+    buggy.setMaxOmega(0.5f);//rad/sec
 
     // "forgetBluetoothKeys()" should be called when the user performs
     // a "device factory reset", or similar.
@@ -274,9 +294,9 @@ void setup() {
     // By default, it is disabled.
     BP32.enableVirtualDevice(false);
 
-    bms.begin(9600);
+    bms.begin(115200);
     bms.setStatusCallback(&handleBmsStatus);
-    bms.startDataUpload(); 
+    //bms.startDataUpload(); 
 }
 
 // Arduino loop function. Runs in CPU 1.
@@ -288,15 +308,27 @@ void loop() {
         if (dataUpdated){
             processControllers();
         };
-        bms.poll();
+        //bms.poll();
 
-        // The main loop must have some kind of "yield to lower priority task" event.
-        // Otherwise, the watchdog will get triggered.
-        // If your main loop doesn't have one, just add a simple `vTaskDelay(1)`.
-        // Detailed info here:
-        // https://stackoverflow.com/questions/66278271/task-watchdog-got-triggered-the-tasks-did-not-reset-the-watchdog-in-time
-
+        if (serialBmsMode && Serial.available() > 0){
+            String input = Serial.readStringUntil('\n'); // Read input until newline
+            if (input == "exit"){
+                serialBmsMode = false;
+                Serial.println("Serial mode : OFF");
+                bms.startDataUpload(); 
+            } else {
+                bms.sendRawCommand(input);
+                
+            }
+            
+        }
+    } 
+    
+    // The main loop must have some kind of "yield to lower priority task" event.
+    // Otherwise, the watchdog will get triggered.
+    // If your main loop doesn't have one, just add a simple `vTaskDelay(1)`.
+    // Detailed info here:
+    // https://stackoverflow.com/questions/66278271/task-watchdog-got-triggered-the-tasks-did-not-reset-the-watchdog-in-time
     vTaskDelay(1);
-    }
-   //delay(150);
+
 }
