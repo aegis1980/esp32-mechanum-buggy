@@ -21,6 +21,7 @@ const float DEADZONE_JOY = 5.0f;
 const float LEFT_TRIGGER = 1020.0f;
 const float RIGHT_TRIGGER = 1020.0f;
 
+long lastBuggyUpdateTime;
 
 
 // direction , step
@@ -297,6 +298,8 @@ void setup() {
     bms.begin(115200);
     bms.setStatusCallback(&handleBmsStatus);
     //bms.startDataUpload(); 
+
+    lastBuggyUpdateTime = millis();
 }
 
 // Arduino loop function. Runs in CPU 1.
@@ -305,10 +308,12 @@ void loop() {
     // Call this function in your main loop.
     if (!firmwareUpdate){
         bool dataUpdated = BP32.update();
-        if (dataUpdated){
+        long elapsed = millis() - lastBuggyUpdateTime;
+        if (dataUpdated && elapsed >= 25){
             processControllers();
+            lastBuggyUpdateTime = millis();
         };
-        //bms.poll();
+        bms.poll();
 
         if (serialBmsMode && Serial.available() > 0){
             String input = Serial.readStringUntil('\n'); // Read input until newline
@@ -318,7 +323,6 @@ void loop() {
                 bms.startDataUpload(); 
             } else {
                 bms.sendRawCommand(input);
-                
             }
             
         }
