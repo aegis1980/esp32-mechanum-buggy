@@ -42,7 +42,7 @@ void MecanumBuggy::_calcSmallRpmChange(){
   // max rpm 
   float r = (v/ _wheelRadius) * ( 60 / PI2);
 
-  _smallRpmChange = r/150;
+  _smallRpmChange = r/50;
 }
 
 void MecanumBuggy::_setWheelTargetRPM(Wheel& wheel, float targetRpm) {
@@ -134,4 +134,9 @@ void MecanumBuggy::setMaxOmega(float a){
   maxOmega = a;
   _calcSmallRpmChange();
 } 
+
+void MecanumBuggy::setMotorSpeedInHz(int motor, uint32_t s){
+  _wheels[motor].stepper->setSpeedInHz(s);
+  _wheels[motor].stepper->runForward();
+}
 

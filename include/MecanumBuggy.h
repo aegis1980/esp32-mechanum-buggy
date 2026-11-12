@@ -1,5 +1,5 @@
-#ifndef MECANUM_H
-#define MECANUM_H
+#ifndef MECANUMBUGGY_H
+#define MECANUMBUGGY_H
 
 #include <FastAccelStepper.h>
 
@@ -52,6 +52,8 @@ public:
     void setMaxStrafe(float s);// m/sec
     void setMaxThrottle(float t); //m/sec
     void setMaxOmega(float a); //degrees per sec
+
+    void setMotorSpeedInHz(int motor, uint32_t speed);
 
 
 

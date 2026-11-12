@@ -36,6 +36,9 @@ BatteryManager bms;
 
 ControllerPtr myControllers[BP32_MAX_GAMEPADS];
 
+unsigned long lastBtnTime[] = {0,0,0,0};
+bool lastBtnState[] = {false,false,false,false};
+
 unsigned long buttonsHeldStartTime = 0;
 bool buttonsWereHeld = false;
 
@@ -184,18 +187,30 @@ void processGamepad(ControllerPtr ctl) {
 
 
     if (ctl->a()) {
-        enterSerialMode();
+        if (lastBtnTime[0] == 0) {
+            lastBtnTime[0] = millis();
+        }
+        
+        if ((millis() - lastBtnTime[0] > 500)){
+            if (lastBtnState[0]){
+                buggy.setMotorSpeedInHz(0,0);
+            } else {
+                
+                buggy.setMotorSpeedInHz(0,400);
+            }
+
+            lastBtnState[0] = -lastBtnState[0];
+            lastBtnTime[0] = millis();
+        }
+        
     }
 
 
     if (ctl->x()) {
-        // Some gamepads like DS3, DS4, DualSense, Switch, Xbox One S, Stadia support rumble.
-        // It is possible to set it by calling:
-        // Some controllers have two motors: "strong motor", "weak motor".
-        // It is possible to control them independently.
-        //ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,
-         //                   0x40 /* strongMagnitude */);
+       // buggy.setMotorSpeedInHz(1,400);
     }
+
+    return;
 
     //stafe with left joy
     float strafe = mapFloat(
